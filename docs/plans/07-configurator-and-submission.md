@@ -31,7 +31,9 @@ capacity-gated ordering, or a production queue. **That gap is the product.**
 ### 2.2 Full custom commission
 Same spine, three differences:
 
-- A **commission fee** is added (covers consultation + the maker's time on a one-off).
+- The **commission** lands higher in its range — a one-off costs more of the maker's time, and
+  complexity is what moves that number ([[04-pricing-engine]] §4). It is no longer a custom-only
+  surcharge: every order carries a commission, because it is the only thing paying for labour.
 - The customer may submit a **denim sourcing request** instead of choosing from the curated list: a
   link, mill/fabric name, weight, and notes. The maker confirms availability and landed cost before
   quoting; the deposit reflects the actual sourced denim cost
@@ -46,12 +48,16 @@ Custom commissions consume the **same slots** as presets — there is one pool o
 - Everything monetary is computed **server-side**. The browser posts ids and measurements only; a
   client-supplied total is ignored ([[03-security-baseline]] §2).
 - The estimate is the `Breakdown` from [[04-pricing-engine]], rendered line by line.
-- Range-quoted features (`requires_review = true`) display a **range**, clearly marked pending
-  review — never a fabricated point estimate.
+- **Materials are exact; the commission is a range.** The estimate reads "$100 materials + $50–100,
+  final price set on approval" — clearly marked pending review, never a fabricated point estimate
+  ([[04-pricing-engine]] §4).
 - The screen must state plainly that the final price is set after the maker reviews measurements and
   reference images, and that fabric price may change until the quote is issued.
-- The customer never sees `cost_per_yard`, `price_buffer_pct`, or the multiplier — only a single
-  final cost per line. **Denim is never described as sold at cost.**
+- **Materials are sold at cost, and we may now say so.** The denim line is the buffered figure,
+  labelled as including a price buffer that is settled against the real cost at balance
+  ([[04-pricing-engine]] §3). The prohibition in the previous version of this document is retired.
+- What the customer still never sees is the arithmetic: no raw `cost_per_yard`, no
+  `price_buffer_pct`, no multiplier — one final cost per line.
 
 ## 4. Validation of selections
 
@@ -103,14 +109,15 @@ enqueues a fabric price refresh ([[04-pricing-engine]] §5).
 
 1. Does the configurator allow **multiple garments per order**? Assumed **no** for v1 — one garment,
    one order, one slot. Worth confirming, because it touches the slot model.
-2. Is the commission fee shown as its own line or folded into labor? Own line, assumed.
+2. ~~Is the commission fee shown as its own line or folded into labor?~~ **Its own line, always.**
+   There is no labor line left to fold it into ([[04-pricing-engine]] §2).
 3. How many reference images per feature? One, assumed.
 
 ## 9. Definition of done
 
 - [ ] Preset and custom paths both reach `SUBMITTED`
 - [ ] No price of any kind is accepted from the client (asserted by test)
-- [ ] Range-quoted features render as ranges with the pending-review label
+- [ ] Materials render exactly and the commission renders as a range with the pending-review label
 - [ ] Saved configurations round-trip and prefill a submission
 - [ ] All four failure modes in §7 handled without an error page
 </content>

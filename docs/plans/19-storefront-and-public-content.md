@@ -49,9 +49,19 @@ These are not decoration. Each exists because of a decision made elsewhere:
 - **"Estimate" vs. "final quote."** The configurator's number is an estimate; the final price is set
   after the maker reviews measurements and reference images, and fabric price may change until the
   quote is issued ([[04-pricing-engine]] §8).
-- **Never describe denim as sold at cost.** The buffer is retained, not credited back. This is a
-  direct consequence of the plain-buffer decision and is **not optional**
-  ([[04-pricing-engine]] §3).
+- **Materials are sold at cost, and we may say so.** The true-up settles the denim buffer against
+  what the fabric actually cost, which makes the claim true ([[04-pricing-engine]] §3.3). The
+  previous version of this document forbade it; that prohibition is retired. Most made-to-measure
+  shops cannot make this claim honestly, so it is worth making well.
+- **The commission is the maker's income, stated as its own line.** Not buried in a materials figure.
+  The pitch is *you pay for the cloth, and you pay him for his time* — which is only credible if both
+  numbers are visible.
+- **The accepted total is a ceiling.** The customer will never be asked for more than the figure they
+  accepted; if the denim lands cheaper the difference comes back on the balance
+  ([[04-pricing-engine]] §3.2).
+- **The credit is never called a discount.** Nothing was marked down — it is a returned overcharge.
+  "Denim came in under estimate" or similar. Framing it as a saving is the kind of copy that ages
+  badly on a public storefront.
 - **Deposit is non-refundable once the denim is purchased or cut** — stated at acceptance, not buried
   in terms.
 - **No returns or exchanges** — made to measure. Fit handled case by case against the published

@@ -41,7 +41,7 @@ himself ([[16-shipping-and-tax]]).
 | Stage | Amount | Trigger |
 | --- | --- | --- |
 | **Deposit** | `denim_cost` incl. buffer, rounded up | Customer accepts quote. **Buys their place in line — no deposit, no position.** |
-| **Balance** | `total − deposit` | Order reaches `READY` |
+| **Balance** | `total − deposit − true_up_credit` | Order reaches `READY` **and** the actual denim cost is recorded |
 
 The deposit becomes **non-refundable once the denim is purchased or cut** — stated on the
 quote-acceptance screen, not buried in terms ([[12-admin-review-and-quoting]] §5). Since nothing is
@@ -49,6 +49,22 @@ held in stock, the deposit is what funds the fabric purchase; **the maker should
 it clears.**
 
 Shipping and tax are part of the **balance**, not the deposit.
+
+### 3.1 The true-up
+
+The balance settles the denim buffer against what the fabric actually cost
+([[04-pricing-engine]] §3.2). It moves in one direction only:
+
+- Denim came in **under** the buffered figure → the difference is **credited**, shown as its own
+  named line. Not a discount; nothing was marked down.
+- Denim came in **over** → **the maker absorbs it.** The customer's total never rises above the
+  figure they accepted.
+
+Two consequences for this integration. The balance amount is computed **server-side** at session
+creation from the frozen quote plus the recorded actual — never passed in, and never recomputed from
+live catalog rows ([[03-security-baseline]] §2). And **creating a balance Checkout Session is refused
+while `actual_denim_cost` is null** ([[12-admin-review-and-quoting]] §6), because the correct amount
+is not yet knowable.
 
 ## 4. Provider interface
 
@@ -100,6 +116,9 @@ including the case where a curated fabric is discontinued mid-order.
   email.
 - Events delivered **out of order** never produce an illegal state.
 - An event whose amount does not match `deposit_amount` is rejected and alerted.
+- A balance session cannot be created while `actual_denim_cost` is null.
+- Balance amount reflects the true-up credit when the denim came in under, and is unchanged when it
+  came in over.
 - An unsigned or replayed-with-old-timestamp payload is rejected.
 - `deposit_paid_at` is unwritable from any customer-facing route (part of the authorization matrix,
   [[02-identity-and-authorization]] §6).

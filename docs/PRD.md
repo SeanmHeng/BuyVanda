@@ -1,7 +1,7 @@
 # BuyVanda — Product Requirements Document & Roadmap
 
-**Status:** Draft v2.0 — scope settled; detail decomposed into component plans ·
-**Date:** 2026-07-25 · **Owner:** jjgreenwald
+**Status:** Draft v2.1 — scope settled; detail decomposed into component plans ·
+**Date:** 2026-07-29 · **Owner:** jjgreenwald
 
 > **This document is the index.** It holds the product decisions, the architecture at a glance, and
 > the build order. Every component and feature has its own plan under [plans/](plans/), and that plan
@@ -39,14 +39,18 @@ Everything below is settled. Each links to the plan that implements it.
 | Formula estimate + mandatory maker approval before any charge | [04](plans/04-pricing-engine.md), [12](plans/12-admin-review-and-quoting.md) |
 | Deposit = denim cost incl. buffer; balance on ready | [13](plans/13-payments-and-stripe.md) |
 | Configurator + queue as v1 | [07](plans/07-configurator-and-submission.md), [10](plans/10-queue-and-production-tracking.md) |
-| Sourced-to-order; flat per-fabric buffer + 14-day quote expiry; single final cost shown | [04](plans/04-pricing-engine.md) §3 |
+| **Materials at cost; all margin is a flat maker-set commission ($50–100 by complexity)** | [04](plans/04-pricing-engine.md) §2, §4 |
+| Sourced-to-order; per-fabric buffer + 14-day quote expiry | [04](plans/04-pricing-engine.md) §3 |
+| **Buffer is trued up: unused is credited at balance, overruns are absorbed. The accepted total is a ceiling** | [04](plans/04-pricing-engine.md) §3.2 |
+| **Commission range lives in `shop_settings`, maker-editable** | [04](plans/04-pricing-engine.md) §4 |
+| **Balance checkout blocked until the actual denim cost is recorded** | [12](plans/12-admin-review-and-quoting.md) §6 |
 | **Stripe** for payments; webhooks are the source of payment truth | [13](plans/13-payments-and-stripe.md) |
 | Everything made to measure | [06](plans/06-measurement-capture.md) |
 | Flat-rate shipping by zone | [16](plans/16-shipping-and-tax.md) |
 | Per-order in-app messaging with email/phone contact preference | [18](plans/18-messaging-and-notifications.md) |
-| Range-quoted embroidery priced at review | [04](plans/04-pricing-engine.md) §4 |
+| Embroidery and all other labor absorbed by the commission, judged at review | [04](plans/04-pricing-engine.md) §4 |
 | Flat `yards_billed` per silhouette — the customer pays the full cut | [04](plans/04-pricing-engine.md) §2.1 |
-| Fit issues handled case by case against a **published** policy | [12](plans/12-admin-review-and-quoting.md) §7 |
+| Fit issues handled case by case against a **published** policy | [12](plans/12-admin-review-and-quoting.md) §8 |
 | **Hard cap of 5 concurrent commissions, sold as limited drops** | [09](plans/09-capacity-slots-and-drops.md) |
 | **No waitlist** | [09](plans/09-capacity-slots-and-drops.md) §8 |
 
@@ -118,7 +122,7 @@ expensive and because every later plan writes against them.*
 | 01 | [Data Model & Migrations](plans/01-data-model-and-migrations.md) | Schema, Alembic, money type, snapshot boundaries | P |
 | 02 | [Identity & Authorization](plans/02-identity-and-authorization.md) | Delegated auth, sessions, admin MFA + break-glass, `get_owned_order`, the route-walking IDOR matrix | P |
 | 03 | [Security Baseline](plans/03-security-baseline.md) | Never trust the client for money or state, input validation, XSS, SSRF, uploads, rate limiting, PII | P |
-| 04 | [Pricing Engine](plans/04-pricing-engine.md) | The formula as a pure function, buffers, quote expiry, range-quoted features, golden tests | J |
+| 04 | [Pricing Engine](plans/04-pricing-engine.md) | The formula as a pure function, the commission, buffers and the true-up, quote expiry, golden tests | J |
 | 05 | [API Contract & Typed Client](plans/05-api-contract-and-typed-client.md) | Route namespaces, request/response conventions, generated TS client | J |
 
 ### Tier 2 — The customer path
@@ -196,7 +200,9 @@ Each risk is owned by the plan that mitigates it.
 | Unpaid submissions squat scarce slots | 72-hour hold, then `SLOT_FORFEITED` and the slot returns to the pool | [09](plans/09-capacity-slots-and-drops.md) |
 | Drop scarcity attracts bots/abuse | Verified email, account+IP rate limits, one active order per customer per drop | [03](plans/03-security-baseline.md), [09](plans/09-capacity-slots-and-drops.md) |
 | Queue position disputes | Position derives from `deposit_paid_at`, set from the Stripe webhook and never edited | [10](plans/10-queue-and-production-tracking.md), [13](plans/13-payments-and-stripe.md) |
-| Fabric price rises before purchase | Per-fabric buffer + 14-day quote expiry; scraper price monitoring flags stale cost | [04](plans/04-pricing-engine.md), [17](plans/17-sourcing-and-scraper-intake.md) |
+| Fabric price rises before purchase | Per-fabric buffer + 14-day quote expiry; scraper price monitoring flags stale cost. **Anything above the buffer is absorbed by the maker, never billed on** | [04](plans/04-pricing-engine.md), [17](plans/17-sourcing-and-scraper-intake.md) |
+| Commission set too low to sustain the business | It is now the **only** margin in an order; validated against real build times in the simulator before launch pricing is set | [04](plans/04-pricing-engine.md) §9, [15](plans/15-admin-catalog-and-price-list.md) §4 |
+| Maker forgets to record the actual denim cost | Balance checkout is blocked rather than falling back to the estimate — a stuck payment instead of a silent overcharge | [12](plans/12-admin-review-and-quoting.md) §6 |
 | Curated fabric discontinued mid-order | Availability confirmed at quote; if it dies after deposit, substitute or refund | [12](plans/12-admin-review-and-quoting.md) |
 | Scraped third-party data on a commercial site | Maker-only behind admin auth; customers see curated fabrics with the maker's own photos | [17](plans/17-sourcing-and-scraper-intake.md) |
 | Scraped content is untrusted input rendered to the admin | Escape on render, validate URL schemes — it targets the one account that can change prices | [17](plans/17-sourcing-and-scraper-intake.md) |
@@ -216,8 +222,8 @@ Each risk is owned by the plan that mitigates it.
 None block building. They are seed data behind an admin screen
 ([15](plans/15-admin-catalog-and-price-list.md)).
 
-1. **Per-silhouette `yards_billed`, `base_labor_cost`, `build_time_days`** — the numbers that set every
-   price and the queue's pace.
+1. **Per-silhouette `yards_billed` and `build_time_days`** — the denim quantity and the queue's pace.
+   `base_labor_cost` is **no longer needed**; labor is the commission now.
 2. **Supplier lead times** — typical and worst case, per supplier.
 3. **Shipping zone rates**, and which states count as "near".
 4. **Hardware unit costs** — buttons, rivets, zippers, buckles.
@@ -226,6 +232,9 @@ None block building. They are seed data behind an admin screen
 7. **Drop cadence** — reopen as each slot frees, or batch to 5 and open all at once? Batching is the
    stronger drop; trickling keeps him busier.
 8. **Sales tax** — whether the maker has nexus obligations; Stripe Tax if so.
+9. **The commission range** — $50–100 assumed. It is the only margin in an order, so this is the
+   number that decides whether the business pays for itself. Editable in `shop_settings`, but worth
+   getting close before the first drop ([04](plans/04-pricing-engine.md) §9).
 
 ### 9.2 Blocked on us — technical decisions
 Each is marked `[ ] DECIDE` in its plan. Ordered by when it must be answered.
@@ -248,6 +257,7 @@ Each is marked `[ ] DECIDE` in its plan. Ordered by when it must be answered.
 
 | Version | Change |
 | --- | --- |
+| v2.1 | **Pricing model changed.** Margin moved out of computed labor (`base_labor` + per-feature labor) into a single flat commission the maker sets at review, $50–100 by complexity, editable in `shop_settings`. Materials became pass-through and the denim buffer became a **true-up**: unused buffer is credited at balance, overruns are absorbed, and the accepted total is a ceiling. The at-cost claim is now true and permitted. Touches [01](plans/01-data-model-and-migrations.md), [03](plans/03-security-baseline.md), [04](plans/04-pricing-engine.md), [07](plans/07-configurator-and-submission.md), [10](plans/10-queue-and-production-tracking.md), [12](plans/12-admin-review-and-quoting.md), [13](plans/13-payments-and-stripe.md), [15](plans/15-admin-catalog-and-price-list.md), [19](plans/19-storefront-and-public-content.md). |
 | v2.0 | Decomposed into 22 component plans under `plans/`; this document became the index and roadmap. Content is unchanged in substance — every decision from v1.3 now lives in the plan that owns it. |
 | v1.3 | Scope settled, security and engineering practices defined. |
 </content>

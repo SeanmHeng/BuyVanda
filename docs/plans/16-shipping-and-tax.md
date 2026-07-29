@@ -48,11 +48,31 @@ before that it must be shown as excluded rather than silently zero.
 ## 4. Fulfillment
 
 **Accepted tradeoff of not using Shopify:** no built-in shipping labels or fulfillment tooling — the
-maker buys postage himself. In v1, `SHIPPED` is a maker-entered transition with an optional tracking
-number, not an integration.
+maker buys postage himself. `SHIPPED` is a maker-entered transition, not an integration.
 
-- [ ] **DECIDE:** store a tracking number and carrier on the order and surface it in the portal?
-      One field, meaningful reduction in "where is it" messages. Recommendation: yes.
+**DECIDED:** store the carrier and tracking number, render a link, integrate nothing.
+
+`orders.tracking_carrier` (enum — USPS, UPS, FedEx, other) and `orders.tracking_number`, both entered
+by hand on the `BALANCE_PAID → SHIPPED` transition ([[08-order-lifecycle-state-machine]] §3). The
+portal renders them as a link to the carrier's own tracking page
+([[14-customer-portal]]), and the outbox sends the number with the shipped
+notification ([[18-messaging-and-notifications]]).
+
+Two things this deliberately does **not** do:
+
+- **No carrier API.** No live status, no delivery date pulled from the carrier. The link is the
+  carrier's page, which is better at this than we would be.
+- **No label purchasing.** Buying postage through the app means a label API (EasyPost, Shippo): an
+  account, a funded postage balance, label printing, per-label fees, and another dependency that can
+  fail on a shipping day. At five concurrent orders, typing a tracking number takes ten seconds.
+
+The customer's delivery expectation does not come from the carrier anyway — it is the turnaround
+range in [[10-queue-and-production-tracking]] §4, where `shipping_transit` is a property of the zone.
+The tracking link answers "where is it *now*", which is a different question and only exists once the
+parcel does.
+
+Revisit if the maker ships enough that buying postage by hand becomes the annoying part of his week.
+A label API replaces this cleanly and changes nothing the customer sees.
 
 ## 5. Tax
 
@@ -72,7 +92,7 @@ May be disabled at launch. If enabled, two things that are not shipping-rate pro
 
 - Customs declarations and duties are the customer's, and must be said so on the acceptance screen.
 - Return of an unwearable made-to-measure garment across a border is not a thing that happens; the
-  Fit & Alterations policy ([[12-admin-review-and-quoting]] §7) carries even more weight here.
+  Fit & Alterations policy ([[12-admin-review-and-quoting]] §8) carries even more weight here.
 
 Recommendation: **disabled at launch**, enabled deliberately once domestic flow is proven.
 
@@ -82,6 +102,7 @@ Recommendation: **disabled at launch**, enabled deliberately once domestic flow 
 - An address matching no zone falls back to the default zone, never $0.
 - Shipping lands in the balance, never the deposit.
 - A zone rate edited after quoting leaves the order's `shipping_amount` unchanged.
+- `SHIPPED` requires a carrier and tracking number, and the portal renders a working carrier link.
 
 ## 8. Definition of done
 
@@ -89,4 +110,5 @@ Recommendation: **disabled at launch**, enabled deliberately once domestic flow 
 - [ ] Zero-rate impossible for any address, proven by test
 - [ ] `shipping_amount` snapshotted at quote and included in the balance
 - [ ] Tax present as a line that evaluates to zero until the nexus question is answered
+- [ ] Carrier and tracking number captured at `SHIPPED` and surfaced as a link in the portal
 </content>

@@ -33,14 +33,14 @@ Business rules that operate on these tables — they live in the plan for the fe
 | `suppliers` | id, name, url, lead_time_typical_days, lead_time_worst_days, notes | [[15-admin-catalog-and-price-list]] |
 | `fabrics` | id, name, color, weight_oz, cost_per_yard, price_buffer_pct, is_curated, reorderable, supplier_id, product_url, last_price_checked_at, photo_key | [[15-admin-catalog-and-price-list]] |
 | `fabric_price_history` | fabric_id, cost_per_yard, observed_at, source | [[17-sourcing-and-scraper-intake]] |
-| `silhouettes` | id, name, base_labor_cost, yards_billed, oversize_threshold (jsonb), oversize_extra_yards, build_time_days, active | [[04-pricing-engine]] |
-| `features` | id, name, category, labor_price, price_min, price_max, size_tier, applies_to[], requires_review, required_hardware[] | [[04-pricing-engine]] |
+| `silhouettes` | id, name, yards_billed, oversize_threshold (jsonb), oversize_extra_yards, build_time_days, active | [[04-pricing-engine]] |
+| `features` | id, name, category, material_price, size_tier, applies_to[], requires_review, required_hardware[] | [[04-pricing-engine]] |
 | `hardware` | id, name, kind, unit_cost, default_qty, active | [[04-pricing-engine]] |
-| `shop_settings` | max_slots, override_state (`auto`/`force_open`/`force_closed`), next_drop_at, closed_message | [[09-capacity-slots-and-drops]] |
+| `shop_settings` | max_slots, override_state (`auto`/`force_open`/`force_closed`), next_drop_at, closed_message, commission_min, commission_max | [[09-capacity-slots-and-drops]], [[04-pricing-engine]] §4 |
 | `drops` | id, opened_at, closed_at, slots_offered, opened_by | [[09-capacity-slots-and-drops]] |
 | `saved_configurations` | user_id, silhouette_id, fabric_id, measurement_profile_id, features (jsonb), indicative_total, created_at | [[07-configurator-and-submission]] |
-| `orders` | id, user_id, drop_id, type (`preset`/`custom`), silhouette_id, fabric_id \| sourcing_request_id, measurement_snapshot (jsonb), status, sub_stage, priority, estimate_total, final_total, cost_breakdown (jsonb), yards_billed_at_quote, cost_per_yard_at_quote, buffer_pct_at_quote, quote_valid_until, slot_hold_expires_at, shipping_zone_id, shipping_amount, policy_accepted_at, deposit_amount, deposit_paid_at, ready_at | [[08-order-lifecycle-state-machine]] |
-| `order_features` | order_id, feature_id, labor_price_at_order, reference_image_key, notes | [[12-admin-review-and-quoting]] |
+| `orders` | id, user_id, drop_id, type (`preset`/`custom`), silhouette_id, fabric_id \| sourcing_request_id, measurement_snapshot (jsonb), status, sub_stage, priority, estimate_total, final_total, cost_breakdown (jsonb), yards_billed_at_quote, cost_per_yard_at_quote, buffer_pct_at_quote, quote_valid_until, slot_hold_expires_at, shipping_zone_id, shipping_amount, policy_accepted_at, commission_fee, deposit_amount, deposit_paid_at, actual_denim_cost, denim_cost_recorded_at, denim_proof_key, ready_at, tracking_carrier, tracking_number | [[08-order-lifecycle-state-machine]] |
+| `order_features` | order_id, feature_id, material_price_at_order, reference_image_key, notes | [[12-admin-review-and-quoting]] |
 | `order_hardware` | order_id, hardware_id, qty, unit_cost_at_order | [[04-pricing-engine]] |
 | `order_events` | order_id, actor_id, from_status, to_status, note, created_at | [[08-order-lifecycle-state-machine]] |
 | `payments` | order_id, kind (`deposit`/`balance`), provider, provider_ref, amount, status | [[13-payments-and-stripe]] |
@@ -68,11 +68,17 @@ edits never move an existing quote:
 - `measurement_snapshot` — editing a saved profile must never change a placed order.
 - `yards_billed_at_quote`, `cost_per_yard_at_quote`, `buffer_pct_at_quote`
 - `cost_breakdown` (jsonb) — the full pricing `Breakdown`, persisted verbatim
-- `order_features.labor_price_at_order`, `order_hardware.unit_cost_at_order`
+- `order_features.material_price_at_order`, `order_hardware.unit_cost_at_order`
 - `shipping_amount`
+- `commission_fee` — the maker's number for this garment. A later edit to
+  `shop_settings.commission_min`/`max` never reprices a quoted order ([[04-pricing-engine]] §4).
 
 The rule generalizes: **a catalog row is a template, an order row is a record.** If a field on the
 order can be derived from a catalog row at read time, it is probably a bug.
+
+**The true-up is not an exception to this.** `actual_denim_cost` is recorded after the quote, but it
+never rewrites `final_total` — the credit is computed from the two frozen figures and rendered as its
+own line, so the record reads *quoted → adjustment → charged* ([[04-pricing-engine]] §3.4).
 
 ### 4.3 Ids
 Public ids are **UUIDs** (non-sequential) to raise the cost of enumeration. This is defense in depth,

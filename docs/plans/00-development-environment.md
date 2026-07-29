@@ -65,12 +65,16 @@ Requirements:
 Seeds are **code (a versioned script), not a dumped SQL file**, so they keep working as the schema
 moves. The dataset must include:
 
-- Real silhouettes with plausible `base_labor_cost`, `yards_billed`, `build_time_days`.
+- Real silhouettes with plausible `yards_billed` and `build_time_days`.
+- A commission range in `shop_settings` ([[04-pricing-engine]] §4).
 - A dozen fabrics across **two suppliers** with different `price_buffer_pct` and lead times.
-- Hardware and features with prices, including at least one `requires_review` range-quoted feature.
+- Hardware with unit costs, and features with **material** prices — including at least one feature
+  that consumes nothing and therefore costs nothing ([[04-pricing-engine]] §2.1).
 - Orders sitting in **every** state, specifically:
   - a `QUOTED` order with **two hours left** on its slot hold
-  - one `IN_PRODUCTION / awaiting_denim`
+  - one `IN_PRODUCTION / awaiting_denim` **with no denim cost recorded** — the blocked-balance case
+  - one `IN_PRODUCTION` **with a recorded cost below the buffered figure** — the true-up credit case
+  - one **with a recorded cost above it** — the absorbed-overrun case
   - one `READY` awaiting balance
   - a full drop at **5/5**
   - a `SLOT_FORFEITED` order with its saved configuration intact

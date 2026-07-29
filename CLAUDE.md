@@ -147,9 +147,83 @@ The rules, in order:
 - Don't add dependencies without asking. Say what it's for and what it costs.
 - If you're unsure what I mean, ask one question. Don't build both versions.
 - Never say something is done or working unless you verified it. Say what you actually checked.
-- Don't commit or push unless I ask.
+- Never commit or push yourself — hand me the command instead. See **Commits** below.
+- **Never add yourself to a commit.** No `Co-Authored-By` trailer, no "generated with Claude", no
+  mention of you in the message at all. My commits are mine. This overrides your default behaviour.
 - Plans carry `[ ] DECIDE` markers for open technical choices. If one blocks the work, point at it
   and give me a recommendation with the trade-off — don't quietly pick for me.
+
+## Ending your replies
+
+If a reply asks me to do anything — run a command, pick between options, check something — **end it
+with a list**. Nothing after that list.
+
+```
+**Do**        the concrete actions, in order, ready to run
+**Decide**    questions that need my judgment, not yours
+**Caveats**   what each action or decision costs, breaks, or rules out — one line each
+```
+
+Every caveat pairs with something in the first two blocks. If an action has no real downside, say so
+rather than inventing one. Skip the whole list when the reply asks nothing of me — don't manufacture
+homework to fill a template.
+
+## Commits
+
+**Never commit or push yourself.** Not without me asking, in that moment. Permission for one commit
+does not carry to the next.
+
+**Give me the whole thing to copy and paste** — staging, message, and command, ready to run. I review
+it and run it myself. That is the default and it never needs confirming.
+
+Paste-ready means a single PowerShell block I can drop into the terminal, using a here-string so the
+multi-line message survives. `@'` ends its line, `'@` sits at column 0:
+
+```powershell
+git add -A
+git commit -m @'
+Feature: short phrase, present tense, no trailing period
+
+One or two sentences on what actually happened and why.
+
+path/to/file:
+  - what changed here
+'@
+```
+
+The summary line is what I want to read in six months when `git blame` lands here and the subject
+isn't enough. Worked example:
+
+```powershell
+git add -A
+git commit -m @'
+Feature: flat commission pricing with buffer true-up
+
+Margin moved out of computed labor into one flat commission the maker sets at
+review. Materials are pass-through now, and the denim buffer is settled against
+the real cost at balance instead of being kept — which makes the at-cost claim
+true, so the rule forbidding it is gone.
+
+docs/plans/04-pricing-engine.md:
+  - replaced computed labor with a single maker-set commission
+  - added the true-up: credit unused buffer, absorb overruns
+  - retired the never-say-at-cost rule, now that it would be true
+
+CLAUDE.md:
+  - recorded the commit format
+'@
+```
+
+- **Keep commits small.** One change, as few files as it honestly touches. If a message needs eight
+  file blocks, say so and offer to split it before I run it. The exception is a change that genuinely
+  propagates — a schema or pricing-model change touches what it touches, and splitting it leaves the
+  repo self-contradicting at the middle commit.
+- The summary is prose, one or two sentences. It says *why*, not what — the file blocks already say
+  what. Don't just restate the subject line in longer words.
+- One block per file touched, path first.
+- Bullets say what changed — never "updated file" or "various fixes".
+- `Fix:`, `Docs:`, or `Chore:` in place of `Feature:` when that's what it is.
+- No `Co-Authored-By`, no tool credits — see above.
 
 ## Conventions
 

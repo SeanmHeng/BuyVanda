@@ -55,6 +55,11 @@ Advanced by the maker, each writing an `order_event`. The customer timeline is b
 events ([[08-order-lifecycle-state-machine]] §5), so it is a record rather than a rendering of the
 current status alone.
 
+`awaiting_denim` now carries a second obligation: it is where the maker records what the denim
+actually cost ([[12-admin-review-and-quoting]] §6). Balance checkout stays blocked until he does, so
+a forgotten entry surfaces at `READY` as a blocked payment rather than as a customer quietly
+overpaying.
+
 ## 4. Turnaround
 
 Because the maker orders fabric as soon as the deposit clears — not when the garment reaches the

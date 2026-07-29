@@ -40,7 +40,7 @@ DRAFT → SUBMITTED → QUOTED → DEPOSIT_PAID → IN_PRODUCTION → READY → 
 | `DEPOSIT_PAID → IN_PRODUCTION` | Maker | Sub-stage starts at `awaiting_denim` |
 | `IN_PRODUCTION → READY` | Maker | **Releases the slot** — the bench is free; asks for the balance |
 | `READY → BALANCE_PAID` | **Stripe webhook only** | Emails receipt |
-| `BALANCE_PAID → SHIPPED` | Maker | Tracking, if supplied |
+| `BALANCE_PAID → SHIPPED` | Maker | Carrier + tracking number, both **required** ([[16-shipping-and-tax]] §4); emails the customer the link |
 | `SHIPPED → COMPLETED` | Maker or time | Terminal |
 | `* (pre-READY) → CANCELLED` | Admin | Releases slot; refund handled manually |
 

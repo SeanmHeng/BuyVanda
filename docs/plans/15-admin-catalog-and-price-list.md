@@ -18,20 +18,23 @@ none of them block building.
 
 | Entity | Fields that matter | Why it matters |
 | --- | --- | --- |
-| **Silhouettes** | `base_labor_cost`, `yards_billed`, `build_time_days`, `oversize_threshold`, `oversize_extra_yards`, `active` | Sets every price **and** the queue's pace |
+| **Silhouettes** | `yards_billed`, `build_time_days`, `oversize_threshold`, `oversize_extra_yards`, `active` | Sets the denim quantity **and** the queue's pace |
 | **Fabrics** | `cost_per_yard`, `price_buffer_pct`, `is_curated`, `reorderable`, `supplier_id`, `product_url`, `photo_key`, `last_price_checked_at` | The curated list customers choose from; the deposit basis |
 | **Suppliers** | `lead_time_typical_days`, `lead_time_worst_days` | Turnaround quoting — **lead time lives here, not on the fabric** |
-| **Features** | `labor_price`, `price_min`/`price_max`, `size_tier`, `applies_to[]`, `requires_review`, `required_hardware[]` | Labor only — never the physical part |
+| **Features** | `material_price`, `size_tier`, `applies_to[]`, `requires_review`, `required_hardware[]` | **Material only** — the labor is in the commission, the physical part is hardware |
 | **Hardware** | `unit_cost`, `default_qty`, `kind` | Buttons, rivets, zippers, buckles |
 | **Shipping zones** | `region_codes[]`, `flat_rate`, `is_default` | [[16-shipping-and-tax]] |
-| **Shop settings** | `max_slots`, `override_state`, `next_drop_at`, `closed_message` | [[09-capacity-slots-and-drops]] |
+| **Shop settings** | `max_slots`, `override_state`, `next_drop_at`, `closed_message`, `commission_min`, `commission_max` | [[09-capacity-slots-and-drops]]; the commission range is [[04-pricing-engine]] §4 |
 
 ## 3. Rules the screens must enforce
 
 - **`price_buffer_pct` is per fabric, set by that supplier's actual volatility.** Starting values:
   10% default, 15–20% for imported/FX-exposed selvedge, 5% for a stable domestic supplier.
-- **A feature's price is labor only.** The UI should make the `required_hardware[]` link visible so
+- **A feature's price is material only.** Its labor is paid by the commission, so a feature that
+  consumes nothing has no price at all. The UI should make the `required_hardware[]` link visible so
   the maker cannot accidentally price the buckle twice ([[04-pricing-engine]] §2.1).
+- **The commission range is a business number, not a constant.** Editing it must be a form field —
+  and the screen should say that changing it never reprices a quoted order.
 - **Editing a price never touches an existing order** — every quoted order carries its own snapshot
   ([[01-data-model-and-migrations]] §4.2). Worth saying on the screen, because it is the maker's most
   likely worry.
@@ -45,10 +48,12 @@ The same `price()` function as production quoting ([[04-pricing-engine]] §6). T
 hypothetical garment and sees:
 
 - the full breakdown, line by line
-- the **margin** — what is left after denim, hardware, and the buffer
+- the **take-home** — the commission, against the build hours it is meant to pay for
 
-This is the tool that validates `base_labor_cost` as a real hourly rate × hours rather than a number
-that felt about right. It should be built **before launch pricing is set**, not after.
+Materials are pass-through, so margin is no longer something to derive: it is the commission and
+nothing else. The simulator's job is therefore to answer whether $50–100 is a defensible rate for a
+garment that takes a day, and it should be built **before launch pricing is set**, not after
+([[04-pricing-engine]] §9).
 
 ## 5. Price freshness and history
 
@@ -81,17 +86,18 @@ Fabric search uses a hardcoded sort/filter allowlist and escapes `%`/`_` in `LIK
 
 None of these block building; they are values behind these screens.
 
-1. Per-silhouette `yards_billed`, `base_labor_cost`, `build_time_days`
+1. Per-silhouette `yards_billed` and `build_time_days`
 2. Supplier lead times (typical + worst case)
 3. Shipping zone rates and which states count as "near"
 4. Hardware unit costs
 5. Oversize thresholds
-6. Commission fee
+6. The commission range — $50–100 assumed, revisited against real build times
 
 ## 9. Definition of done
 
 - [ ] CRUD for all seven entities in §2
-- [ ] Simulator showing breakdown **and** margin
+- [ ] Simulator showing breakdown **and** take-home per garment
+- [ ] Commission range editable, with quoted orders provably unaffected
 - [ ] Price edits audited; snapshot isolation demonstrated on the screen's copy and by test
 - [ ] Stale-price age visible per fabric
 - [ ] Non-curated fabrics provably unreachable from the configurator

@@ -94,7 +94,7 @@ work; IP limits are a backstop against unauthenticated floods.
 Implemented in **Redis** — shared across instances. In-process counters are useless behind more than
 one container. Edge/WAF limits are an additional layer, not a replacement.
 
-## 7. File uploads (embroidery reference images)
+## 7. File uploads (embroidery reference images, supplier invoices)
 
 - Cap size; verify the real content type by **sniffing magic bytes**, not by extension or the client's
   header.
@@ -102,6 +102,11 @@ one container. Edge/WAF limits are an additional layer, not a replacement.
 - **Reject SVG.** For this purpose SVG is a script-execution vector, not an image format.
 - Store under **random keys** in a non-public S3 bucket; serve via short-lived presigned URLs so
   access respects the ownership check rather than being public-by-URL.
+
+The maker's proof-of-purchase upload on the cost-entry screen ([[12-admin-review-and-quoting]] §6)
+uses the **same path, unmodified**. An admin upload is not a trusted upload: the admin account is the
+highest-value credential in the system ([[02-identity-and-authorization]] §4), and a bypass built for
+convenience is a bypass an attacker inherits.
 
 ## 8. SSRF
 

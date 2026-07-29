@@ -17,7 +17,7 @@ notifications** that get someone to look at it. The second is where money is los
 
 - Each order has a message thread visible to **its owner and the maker**.
 - **The thread is the record.** It lives in the database and survives email loss — which is what makes
-  case-by-case fit handling ([[12-admin-review-and-quoting]] §7) defensible rather than
+  case-by-case fit handling ([[12-admin-review-and-quoting]] §8) defensible rather than
   he-said-she-said.
 - Maker-side: **one inbox** listing threads with unread counts.
 - Attachments allowed, through the hardened upload path ([[03-security-baseline]] §7).
