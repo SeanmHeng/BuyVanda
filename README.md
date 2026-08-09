@@ -5,12 +5,15 @@ Made-to-measure denim. Five commissions at a time, sold as drops.
 ## Layout
 
 ```
-api/     FastAPI, SQLAlchemy, Alembic, pricing, the worker   (not started)
-web/     React + TypeScript (Vite)
-docs/    PRD.md + plans/ — the design docs
+api/      Hono, Drizzle, Zod, pricing, the worker   (not started)
+web/      React + TypeScript (Vite)
+shared/   Zod schemas + inferred types, imported by both
+docs/     PRD.md + plans/ — the design docs
 ```
 
-The scraper lives in its own repo and talks to the API over `/internal/sourcing/*`.
+TypeScript end to end, on serverless AWS — Lambda behind API Gateway, Postgres on RDS, the frontend
+static on S3 + CloudFront. The scraper is the one exception: Python, in its own repo, on an
+EventBridge schedule, talking to the API over `/internal/sourcing/*` like any other client.
 
 ## Start here
 

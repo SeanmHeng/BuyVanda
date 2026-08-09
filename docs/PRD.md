@@ -53,6 +53,12 @@ Everything below is settled. Each links to the plan that implements it.
 | Fit issues handled case by case against a **published** policy | [12](plans/12-admin-review-and-quoting.md) §8 |
 | **Hard cap of 5 concurrent commissions, sold as limited drops** | [09](plans/09-capacity-slots-and-drops.md) |
 | **No waitlist** | [09](plans/09-capacity-slots-and-drops.md) §8 |
+| **TypeScript end to end** — Hono API, React web, shared Zod schemas. Python only in the scraper | [00](plans/00-development-environment.md), [05](plans/05-api-contract-and-typed-client.md) |
+| **Money is integer cents**, forced by JavaScript having no decimal type | [01](plans/01-data-model-and-migrations.md) §4.1 |
+| **Drizzle + Drizzle Kit**, with hand-written `down` migrations | [01](plans/01-data-model-and-migrations.md) §5 |
+| **Cognito** for identity — MFA with multiple enrollments, for admin break-glass | [02](plans/02-identity-and-authorization.md) §2 |
+| **Serverless AWS** — Lambda + API Gateway + RDS + S3/CloudFront. No Redis, no Fargate | [21](plans/21-infrastructure-and-deployment.md) §3 |
+| **The worker is EventBridge Scheduler → Lambda**, not a long-running process | [11](plans/11-background-jobs-and-outbox.md) §6 |
 
 ## 3. Goals / Non-goals
 
@@ -86,23 +92,34 @@ Everything below is settled. Each links to the plan that implements it.
 
 ## 5. Architecture at a glance
 
+**One language.** The API and the web app are both TypeScript and share a `shared/` package of Zod
+schemas, so a change to a response shape is a compile error rather than a runtime surprise in front
+of a customer.
+
 ```
 React + TypeScript (Vite)          ← storefront, configurator, customer portal, admin panel
-        │  REST/JSON
-FastAPI (Python)                   ← ALL business logic: pricing, quoting, state machine, slots,
-        │                            queue, authorization, payment orchestration, webhooks
-        ├── PostgreSQL (+ Alembic migrations)
-        ├── Redis                  ← rate limiting + background job queue
+        │                            S3 + CloudFront
+        │  REST/JSON               shared/ ← Zod schemas + inferred types, both sides import
+Hono (TypeScript)                  ← ALL business logic: pricing, quoting, state machine, slots,
+        │  Lambda + API Gateway      queue, authorization, payment orchestration, webhooks
+        ├── PostgreSQL             ← RDS · Drizzle ORM · Drizzle Kit migrations
         ├── S3                     ← fabric photos, embroidery reference uploads
-        ├── Identity provider      ← credential storage, password reset, email verification
+        ├── Cognito                ← credential storage, password reset, email verification, MFA
         └── Stripe                 ← Checkout Sessions + webhooks
                 ▲
-        Scraper repo (Python)      ← POSTs to /internal/sourcing/* with a service token
+        Scraper repo (Python)      ← Lambda on an EventBridge schedule
+                                     POSTs to /internal/sourcing/* with a service token
 
-        + a worker process         ← scheduled jobs and the transactional outbox
+        + a worker                 ← EventBridge Scheduler → Lambda, once a minute:
+                                     slot-hold expiry, quote expiry, draining the outbox
 ```
 
-Node is build tooling for the React app only; there is no Node server. Detail in
+**No Redis in v1.** The outbox is a Postgres table and the worker is a scheduled Lambda; at five
+concurrent commissions there is nothing left for a separate cache to do. Rate-limit counters live in
+Postgres behind one function, so the backing store can change later without touching call sites.
+
+Python survives in exactly one place — the scraper — where its parsing libraries have no equal, and
+it stays in its own repo behind a service token. Detail in
 [21 — Infrastructure](plans/21-infrastructure-and-deployment.md).
 
 ## 6. Plan index
@@ -119,11 +136,11 @@ expensive and because every later plan writes against them.*
 | # | Plan | Covers | Own |
 |---|---|---|---|
 | 00 | [Development Environment & CI](plans/00-development-environment.md) | Repo layout, `docker compose`, seed data in every order state, CI gate | J |
-| 01 | [Data Model & Migrations](plans/01-data-model-and-migrations.md) | Schema, Alembic, money type, snapshot boundaries | P |
+| 01 | [Data Model & Migrations](plans/01-data-model-and-migrations.md) | Schema, Drizzle Kit migrations, integer cents, snapshot boundaries | P |
 | 02 | [Identity & Authorization](plans/02-identity-and-authorization.md) | Delegated auth, sessions, admin MFA + break-glass, `get_owned_order`, the route-walking IDOR matrix | P |
 | 03 | [Security Baseline](plans/03-security-baseline.md) | Never trust the client for money or state, input validation, XSS, SSRF, uploads, rate limiting, PII | P |
 | 04 | [Pricing Engine](plans/04-pricing-engine.md) | The formula as a pure function, the commission, buffers and the true-up, quote expiry, golden tests | J |
-| 05 | [API Contract & Typed Client](plans/05-api-contract-and-typed-client.md) | Route namespaces, request/response conventions, generated TS client | J |
+| 05 | [API Contract & Shared Types](plans/05-api-contract-and-typed-client.md) | Route namespaces, request/response conventions, the `shared/` Zod package | J |
 
 ### Tier 2 — The customer path
 *The product itself. Each depends on all of Tier 1 and on the one before it.*
@@ -175,10 +192,10 @@ argument for the sequence.
 |---|---|---|---|---|
 | 0 | Local environment + seed data; CI gate | 00 | J | Every later step is faster with a seeded environment, and the rare states (expiry, forfeit, full shop) never get exercised without one. Retrofitting is nobody's favourite afternoon. |
 | 1 | Schema + migrations; auth; admin MFA + break-glass; `get_owned_order` / `require_admin` from day one | 01, 02 | P | The ownership dependency must exist **before the first order route does**, or it gets added to twenty routes retroactively and missed on one. |
-| 2 | Pricing engine as a pure function + golden tests; generated TS client | 04, 05 | J | Pure and dependency-free, so it can be built and proven before any UI exists. Everything downstream displays its output. |
+| 2 | Pricing engine as a pure function + golden tests; the `shared/` schema package | 04, 05 | J | Pure and dependency-free, so it can be built and proven before any UI exists. Everything downstream displays its output. |
 | 3 | Configurator UI; measurement capture, cross-checks, confirmation; `DRAFT → SUBMITTED` | 06, 07 | J | The product's differentiator, and the first thing worth showing the maker. |
 | 4 | Order state machine + event log | 08 | P | Written once submission exists so the transition table has a real first transition, and before slots, which hook into it. |
-| 5 | Slot enforcement, shop state, drops — transactional; Redis rate limiting | 09, 03 | L | Needs the state machine to hook slot accounting into. The concurrency test is the point; it cannot be written earlier. |
+| 5 | Slot enforcement, shop state, drops — transactional; Postgres-backed rate limiting | 09, 03 | L | Needs the state machine to hook slot accounting into. The concurrency test is the point; it cannot be written earlier. |
 | 6 | Background worker + transactional outbox; slot-hold and quote expiry jobs | 11 | L | Immediately after slots, because **without it a forfeited slot stays occupied and the shop never reopens**. |
 | 7 | Admin review/quote/approve; price simulator; `MockPaymentProvider`; queue computation | 12, 13, 10 | J | The whole lifecycle becomes exercisable end to end with no Stripe keys and no network. |
 | 8 | Customer portal: order list, timeline, queue position, balance payment | 14 | J | Now there is something to display, in every state, from seed data. |
@@ -241,22 +258,24 @@ Each is marked `[ ] DECIDE` in its plan. Ordered by when it must be answered.
 
 | Decision | Plan | Needed by |
 | --- | --- | --- |
-| Monorepo vs. two repos | [00](plans/00-development-environment.md) §3 | step 0 |
-| Identity provider selection | [02](plans/02-identity-and-authorization.md) §2 | **step 1 — blocking** |
-| Money representation: integer cents vs. `NUMERIC` | [01](plans/01-data-model-and-migrations.md) §4.1 | step 1 |
-| Enforcement mechanism for "only `transition()` writes status" | [08](plans/08-order-lifecycle-state-machine.md) §4 | step 4 |
-| Generated-client approach: types-only vs. generated methods | [05](plans/05-api-contract-and-typed-client.md) §6 | step 2 |
 | Advisory lock vs. `FOR UPDATE` for the slot race | [09](plans/09-capacity-slots-and-drops.md) §4 | step 5 |
-| Job runner: APScheduler vs. RQ/Celery | [11](plans/11-background-jobs-and-outbox.md) §6 | step 6 |
+| Enforcement mechanism for "only `transition()` writes status" | [08](plans/08-order-lifecycle-state-machine.md) §4 | step 4 |
 | Re-quote in place vs. new order on `EXPIRED` | [08](plans/08-order-lifecycle-state-machine.md) §8 | step 7 |
 | Email provider and deliverability setup | [18](plans/18-messaging-and-notifications.md) §6 | step 13 |
-| Hosting: AWS now vs. Render/Railway first | [21](plans/21-infrastructure-and-deployment.md) §3 | first deploy |
+| Infrastructure as code: CDK vs. SST | [21](plans/21-infrastructure-and-deployment.md) §3 | first deploy |
 | Data retention and deletion path | [03](plans/03-security-baseline.md) §9 | before launch |
+
+Closed by the TypeScript and AWS decisions (see §2): monorepo layout, identity provider, money
+representation, generated-client approach, job runner, and hosting platform. Two of those did not
+get *answered* so much as **dissolved** — with one language on both sides of the wire there is no
+client to generate, and with a scheduled Lambda draining a Postgres outbox there is no job runner to
+choose.
 
 ## 10. Changelog
 
 | Version | Change |
 | --- | --- |
+| v2.2 | **Stack changed: TypeScript end to end.** FastAPI/SQLAlchemy/Alembic/Pydantic became Hono/Drizzle/Drizzle Kit/Zod; Python stays only in the scraper. Money became integer cents, forced — JavaScript has no decimal type. The generated OpenAPI client dissolved into a shared Zod package, since one language makes drift a compile error. Redis was dropped: the outbox was always a Postgres table, and the worker became EventBridge Scheduler → Lambda. Hosting settled on serverless AWS (Lambda + API Gateway + RDS + S3/CloudFront) over Fargate, whose load balancer alone costs more than the compute. Identity settled on Cognito. Touches [00](plans/00-development-environment.md), [01](plans/01-data-model-and-migrations.md), [02](plans/02-identity-and-authorization.md), [03](plans/03-security-baseline.md), [05](plans/05-api-contract-and-typed-client.md), [11](plans/11-background-jobs-and-outbox.md), [21](plans/21-infrastructure-and-deployment.md). The behavioural plans — 07, 09, 10, 12, 14, 15, 16, 17, 18, 19 — are unchanged, which is the useful signal: the design was written above the level of the language. |
 | v2.1 | **Pricing model changed.** Margin moved out of computed labor (`base_labor` + per-feature labor) into a single flat commission the maker sets at review, $50–100 by complexity, editable in `shop_settings`. Materials became pass-through and the denim buffer became a **true-up**: unused buffer is credited at balance, overruns are absorbed, and the accepted total is a ceiling. The at-cost claim is now true and permitted. Touches [01](plans/01-data-model-and-migrations.md), [03](plans/03-security-baseline.md), [04](plans/04-pricing-engine.md), [07](plans/07-configurator-and-submission.md), [10](plans/10-queue-and-production-tracking.md), [12](plans/12-admin-review-and-quoting.md), [13](plans/13-payments-and-stripe.md), [15](plans/15-admin-catalog-and-price-list.md), [19](plans/19-storefront-and-public-content.md). |
 | v2.0 | Decomposed into 22 component plans under `plans/`; this document became the index and roadmap. Content is unchanged in substance — every decision from v1.3 now lives in the plan that owns it. |
 | v1.3 | Scope settled, security and engineering practices defined. |
