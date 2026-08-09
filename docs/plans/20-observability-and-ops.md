@@ -64,9 +64,18 @@ A short runbook, written before the first drop rather than during it:
 
 ## 6. Health checks
 
-Liveness and readiness endpoints covering database, Redis, and the worker's last heartbeat. A worker
-that has silently died is indistinguishable from a quiet week — until a slot hold never expires and
-the shop never reopens.
+Liveness and readiness endpoints covering the database and **the worker's last successful run**. A
+worker that has silently died is indistinguishable from a quiet week — until a slot hold never
+expires and the shop never reopens.
+
+The worker check changed shape with the worker. There is no process to ping: it is a Lambda that
+wakes every minute and exits ([[11-background-jobs-and-outbox]] §6). So health is a **timestamp it
+writes on each successful run**, and the alarm fires when that timestamp is more than a few minutes
+old. A schedule that stops firing is silent by nature — EventBridge does not report having done
+nothing — which makes this check the only thing standing between a disabled rule and a shop that
+never reopens.
+
+Queue depth needs no broker either: `select count(*) from outbox where status = 'pending'`.
 
 ## 7. Testing
 

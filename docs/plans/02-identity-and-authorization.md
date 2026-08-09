@@ -15,17 +15,27 @@ small apps leak. This document defines both halves and the test that keeps the s
 
 ## 2. Authentication — delegated
 
-The identity provider owns credentials, sessions, password reset, and email verification. The FastAPI
-app owns role checks and ownership checks. **No hand-rolled password hashing, no session table.**
+The identity provider owns credentials, sessions, password reset, and email verification. The API
+owns role checks and ownership checks. **No hand-rolled password hashing, no session table.**
 
-- [ ] **DECIDE:** which identity provider. Candidates: Auth0, Clerk, AWS Cognito, Supabase Auth.
-      Selection criteria in priority order: (1) MFA with more than one enrollment per account, for
-      the break-glass requirement in §4; (2) hosted email verification; (3) cost at ~hundreds of
-      users; (4) a clean way to run it locally in `docker compose` or stub it
-      ([[00-development-environment]]). This blocks step 1.
+**DECIDED: AWS Cognito.** It satisfies the requirement that actually mattered — MFA with more than
+one enrollment per account, for the break-glass case in §4 — and it keeps identity inside the same
+account and bill as the rest of the infrastructure ([[21-infrastructure-and-deployment]]).
 
-`users.idp_subject` is the join key. The local `users` row owns role, contact preference, and
-`email_verified_at` mirrored from the IdP.
+Two costs came with that choice, and both are real:
+
+- **No local emulator.** Cognito was the weakest candidate on the fourth selection criterion — a
+  clean way to run locally. Development points at a **real dev user pool**, free at this volume, and
+  the test suite stubs token verification so it needs no network
+  ([[00-development-environment]] §4).
+- **The hosted UI is dated and awkward to restyle.** Expect to build sign-in, sign-up, and reset
+  screens against the SDK rather than redirecting to a hosted page. More work than Clerk would have
+  been; that was the trade.
+
+`users.idp_subject` is the join key — the Cognito `sub` claim. The local `users` row owns role,
+contact preference, and `email_verified_at` mirrored from the pool. **Role lives in our database,
+not in a Cognito group or a custom claim**: a token is a cached assertion, and an admin flag that
+survives in an unexpired token after we revoke it is exactly the failure this separation prevents.
 
 ## 3. Sessions
 
@@ -45,7 +55,7 @@ highest-value credential in the system.
 - **MFA required** on every admin account.
 - **A second, break-glass admin account** with a separate MFA enrollment. A lost phone with the only
   enrollment locks the maker out of his own shop mid-drop. Both accounts audited.
-- Role is `users.role`; admin routes are **separate routes** behind `require_admin` with their own
+- Role is `users.role`; admin routes are **separate routes** behind `requireAdmin` with their own
   unscoped queries and their own audit events.
 
 ## 5. Object-level authorization (IDOR)
@@ -63,21 +73,24 @@ and no visible symptom.
 > Ownership belongs in the **WHERE clause**, not in an `if` after fetching. A query that can return
 > another user's row has already failed, whatever the code below it does.
 
-```python
-async def get_owned_order(
-    order_id: UUID,
-    user: User = Depends(current_user),
-    db: AsyncSession = Depends(get_db),
-) -> Order:
-    stmt = select(Order).where(Order.id == order_id, Order.user_id == user.id)
-    order = (await db.execute(stmt)).scalar_one_or_none()
-    if order is None:
-        raise HTTPException(404)      # 404, never 403 — see 5.2
-    return order
+```ts
+// Hono middleware — both predicates in the same WHERE clause
+const getOwnedOrder = createMiddleware(async (c, next) => {
+  const user = c.get('user')
+  const order = await db.query.orders.findFirst({
+    where: and(eq(orders.id, c.req.param('orderId')), eq(orders.userId, user.id)),
+  })
+  if (!order) return c.json({ code: 'not_found' }, 404)  // 404, never 403 — see 5.2
+  c.set('order', order)
+  await next()
+})
 ```
 
-Every order-scoped route takes `order: Order = Depends(get_owned_order)` and **never accepts a bare
-`order_id`**. The check cannot be forgotten because there is no other way to obtain the object.
+Every order-scoped route mounts this middleware and reads `c.get('order')`, **never the raw
+`orderId` param**. The check cannot be forgotten because there is no other way to obtain the object.
+
+Typing `c.get('order')` through Hono's context variable map is what makes that true at compile time
+rather than by convention — a handler that skipped the middleware should not type-check.
 
 ### 5.2 Return 404, not 403
 
@@ -96,8 +109,9 @@ Guarding reads is intuitive; the same flaw on submission is easier to exploit an
   the order belongs to the caller. Checking `mid` alone is the classic nested-IDOR bug.
 
 **Mass assignment** is the adjacent flaw. A `PATCH` body containing `user_id`, `status`, `priority`,
-`deposit_paid_at`, or `final_total` must be **rejected, not merged**. `extra="forbid"`
-([[03-security-baseline]]) plus explicit per-route field allowlists — never `Order(**payload)`.
+`deposit_paid_at`, or `final_total` must be **rejected, not merged**. `.strict()` Zod schemas
+([[03-security-baseline]]) plus explicit per-route field allowlists — never spread a parsed body into
+an update. `db.update(orders).set(body)` is the mass-assignment bug written in TypeScript.
 
 ### 5.4 Non-obvious surfaces in this design
 
@@ -106,7 +120,7 @@ Guarding reads is intuitive; the same flaw on submission is easier to exploit an
   A public bucket makes every other check here decorative.
 - **Admin bypass sprinkled inline.** Do not write
   `if not user.is_admin and order.user_id != user.id` scattered through handlers — that pattern gets
-  inverted or dropped during a refactor. Separate routes, `require_admin`, separate queries.
+  inverted or dropped during a refactor. Separate routes, `requireAdmin`, separate queries.
 - **Stripe webhooks** resolve the order via `provider_ref` from the signed payload, never via an id
   supplied by a client ([[13-payments-and-stripe]]).
 - **Queue and drop reads.** Position is derived server-side for the caller's own order. There is no
@@ -130,20 +144,20 @@ one admin, then walks the **entire route table**, asserting that:
 - customer credentials are rejected on every admin-only path
 - admin routes still write their audit event
 
-New routes enter the matrix **by construction** — the test enumerates the FastAPI route table rather
-than a hand-maintained list, so coverage cannot quietly rot. It is written early (step 1) and grown
-continuously; step 9 in the roadmap is when it is audited for completeness, not when it starts.
+New routes enter the matrix **by construction** — the test enumerates Hono's registered routes
+(`app.routes`) rather than a hand-maintained list, so coverage cannot quietly rot. It is written
+early (step 1) and grown continuously; step 9 in the roadmap is when it is audited for completeness,
+not when it starts.
 
 ## 7. Open questions
 
-1. Identity provider selection (§2) — **blocks step 1**.
-2. Whether admins get a read-only "view as customer" path for support. Convenient, and a classic
+1. Whether admins get a read-only "view as customer" path for support. Convenient, and a classic
    place for an ownership check to be bypassed. Default: no, in v1.
 
 ## 8. Definition of done
 
-- [ ] IdP selected, integrated, and stubbable locally
-- [ ] `get_owned_order` / `require_admin` exist before the first order route does
+- [ ] Cognito dev user pool live, integrated, and stubbed in tests
+- [ ] `getOwnedOrder` / `requireAdmin` exist before the first order route does
 - [ ] Two admin accounts with independent MFA enrollments
 - [ ] Route-table-walking authorization matrix in CI, green, and failing when a route is added without
       an ownership dependency

@@ -48,20 +48,27 @@ DRAFT → SUBMITTED → QUOTED → DEPOSIT_PAID → IN_PRODUCTION → READY → 
 
 Transitions live in **one table in code**, not as `if` statements spread across handlers:
 
-```python
-TRANSITIONS: dict[Status, set[Status]] = {
-    Status.SUBMITTED: {Status.QUOTED, Status.DECLINED, Status.CANCELLED},
-    Status.QUOTED:    {Status.DEPOSIT_PAID, Status.SLOT_FORFEITED, Status.EXPIRED, Status.CANCELLED},
-    ...
-}
+```ts
+const TRANSITIONS: Record<Status, readonly Status[]> = {
+  SUBMITTED: ['QUOTED', 'DECLINED', 'CANCELLED'],
+  QUOTED:    ['DEPOSIT_PAID', 'SLOT_FORFEITED', 'EXPIRED', 'CANCELLED'],
+  ...
+} as const
 ```
+
+`Record<Status, ...>` is doing real work: adding a status to the union without adding a row here is
+a compile error, so the table cannot fall behind the enum.
 
 One function performs every change:
 
-```python
-def transition(order, to: Status, actor: User, note: str | None = None) -> None:
-    # rejects illegal transitions, writes the order_event, releases/claims slots
+```ts
+// rejects illegal transitions, writes the order_event, releases/claims slots
+async function transition(tx: Tx, order: Order, to: Status, actor: User, note?: string): Promise<void>
 ```
+
+It takes the **transaction** as its first argument rather than reaching for a connection, because the
+event row, the slot accounting, and the outbox row have to land in the same transaction as the
+status change or the guarantee is gone.
 
 > **Nothing else may assign `order.status`.**
 
@@ -75,9 +82,20 @@ Three things fall out for free:
 Side effects that must reach the outside world — emails, notifications — are **enqueued through the
 outbox inside the same transaction** ([[11-background-jobs-and-outbox]]).
 
-- [ ] **DECIDE:** enforce "nothing else assigns status" with a lint rule, a SQLAlchemy event hook that
-      raises outside the transition function, or code review. A hook is the only one that survives a
-      tired evening.
+- [ ] **DECIDE:** how to enforce "nothing else assigns status". The SQLAlchemy event hook that used
+      to be the answer has no clean TypeScript equivalent, but what replaces it is **stronger**:
+
+      1. **A type boundary.** The `orders` Drizzle table is not exported from the db module. What is
+         exported is `updateOrder(tx, id, patch: Omit<OrderPatch, 'status'>)`. Setting a status
+         outside `lifecycle/` becomes a type error, not a convention.
+      2. **An ESLint rule** banning `db.update(orders)` outside `lifecycle/`, closing the raw-query
+         escape hatch that the type boundary cannot see.
+      3. **A Postgres trigger** rejecting a status change unless a session variable is set — the only
+         true runtime guard, and the only one that survives someone connecting with `psql`.
+
+      Recommendation: **1 + 2.** Both fail before the code can run at all, which beats the hook the
+      Python version relied on — that one raised at runtime, in the request that already went wrong.
+      Add 3 only if a real incident argues for it.
 
 ## 5. The event log
 

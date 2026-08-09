@@ -43,12 +43,12 @@ behaviour**.
 | --- | --- | --- |
 | `/api/public/*` | none | Shop state, silhouettes, curated fabrics, policy copy. Generous per-IP rate limit. |
 | `/api/me/*` | customer session | Profiles, saved configurations, orders, messages. **Never takes a `user_id`** — the session is the scope. |
-| `/api/admin/*` | `require_admin` | Separate routes with their own unscoped queries and audit events. Never a flag on a customer route. |
+| `/api/admin/*` | `requireAdmin` | Separate routes with their own unscoped queries and audit events. Never a flag on a customer route. |
 | `/internal/sourcing/*` | service token | Scraper intake ([[17-sourcing-and-scraper-intake]]). |
 | `/webhooks/stripe` | signature | [[13-payments-and-stripe]]. |
 
-Order-scoped customer routes are nested — `/api/me/orders/{order_id}/…` — and always resolve through
-`get_owned_order` ([[02-identity-and-authorization]]).
+Order-scoped customer routes are nested — `/api/me/orders/{orderId}/…` — and always resolve through
+`getOwnedOrder` ([[02-identity-and-authorization]]).
 
 ## 4. Request conventions
 

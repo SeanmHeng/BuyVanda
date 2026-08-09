@@ -199,15 +199,25 @@ anything above it — which makes the 7-day flag a protection for him, not a for
 
 ## 6. Implementation: pricing is a pure function
 
-```python
-def price(config: PricingInput) -> Breakdown:  # no DB, no HTTP, no framework, no clock
-    ...
+```ts
+// no DB, no HTTP, no framework, no clock — every input is an argument
+export function price(input: PricingInput): Breakdown
 ```
 
 `PricingInput` is plain values — silhouette, fabric cost, buffer, features, hardware, zone, and the
 **commission as an input**, not something the function decides. `Breakdown` returns **every line**,
-never a bare total. The API layer loads rows and calls it; the function itself is deterministic and
+never a bare total. The route loads rows and calls it; the function itself is deterministic and
 trivially testable.
+
+Two rules that keep it pure now that the frontend speaks the same language:
+
+- **`price()` lives in `api/`, never in `shared/`.** Shipping it to the browser would let the client
+  compute a total that looks authoritative, which is the exact confusion the whole design avoids.
+  `shared/` may hold the `Breakdown` *shape*; the function that produces it stays server-side
+  ([[05-api-contract-and-typed-client]] §2).
+- **Every intermediate value is integer cents**, and rounding happens at named, deliberate points —
+  not wherever a division lands ([[01-data-model-and-migrations]] §4.1). The golden table is what
+  proves those points never move.
 
 Three things fall out:
 

@@ -74,7 +74,7 @@ accounting software; enough that the maker does not open Stripe to answer "how d
 
 ## 7. Authorization and safety
 
-All routes under `/api/admin/*` behind `require_admin`
+All routes under `/api/admin/*` behind `requireAdmin`
 ([[02-identity-and-authorization]] §4). Every price edit writes an audit record — the price list is
 the single most valuable thing an attacker who reaches the admin account could quietly change, and
 without a record the change is invisible.

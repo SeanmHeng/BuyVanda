@@ -70,12 +70,20 @@ is not yet knowable.
 
 Kept provider-agnostic so the lifecycle is testable without Stripe keys:
 
-```python
-create_deposit_charge(order, amount) -> ProviderRef
-create_balance_charge(order, amount) -> ProviderRef
-handle_webhook(payload) -> PaymentEvent      # idempotent by provider_ref
-refund(payment, amount) -> ProviderRef
+```ts
+interface PaymentProvider {
+  createDepositCharge(order: Order, amountCents: number): Promise<ProviderRef>
+  createBalanceCharge(order: Order, amountCents: number): Promise<ProviderRef>
+  handleWebhook(rawBody: string, signature: string): Promise<PaymentEvent>  // idempotent
+  refund(payment: Payment, amountCents: number): Promise<ProviderRef>
+}
 ```
+
+`handleWebhook` takes the **raw body**, not a parsed object: Stripe's signature is computed over the
+exact bytes received, so anything that parses first has already destroyed the thing being verified.
+In Hono that means reading the body as text on this route and never mounting a JSON parser ahead of
+it — a mistake that produces a working integration in test mode and an unverifiable one in
+production.
 
 v1 develops against a **`MockPaymentProvider`** from step 7 so the full lifecycle — including queue
 position and balance-due emails — is exercised long before Stripe is wired in.

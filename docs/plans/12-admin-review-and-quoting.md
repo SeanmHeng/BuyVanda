@@ -127,7 +127,7 @@ with the customer on alterations; measurement accuracy is the customer's respons
 
 ## 9. Authorization
 
-Admin review routes live under `/api/admin/*` behind `require_admin`, with their **own unscoped
+Admin review routes live under `/api/admin/*` behind `requireAdmin`, with their **own unscoped
 queries and their own audit events** — never an `is_admin` branch inside a customer route
 ([[02-identity-and-authorization]] §5.4).
 

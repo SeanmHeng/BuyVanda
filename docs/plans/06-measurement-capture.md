@@ -35,7 +35,13 @@ inseam, outseam, plus `fit_preference` and free-text `notes`.
 ## 3. Range validation
 
 Each measurement bounded to a plausible human range — e.g. waist 20–70 in — with the unit taken into
-account. Enforced by Pydantic at the boundary ([[03-security-baseline]] §3), not only in the browser.
+account. Enforced by the Zod schema at the API boundary ([[03-security-baseline]] §3), not only in
+the browser.
+
+The schema lives in `shared/`, so the same bounds drive the form's inline validation and the server's
+rejection — one definition, two jobs, no chance of the browser accepting what the API refuses. **The
+server still validates.** A shared schema means the browser and server agree; it does not mean the
+browser can be trusted to have run it.
 
 ## 4. Cross-field sanity checks
 
