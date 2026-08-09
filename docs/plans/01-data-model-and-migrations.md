@@ -18,7 +18,7 @@ the order at quote time**.
 ## 2. Scope
 
 ### In scope
-Tables, key fields, ownership edges, snapshot boundaries, Alembic conventions, database roles.
+Tables, key fields, ownership edges, snapshot boundaries, migration conventions, database roles.
 
 ### Out of scope
 Business rules that operate on these tables — they live in the plan for the feature that owns them.
@@ -54,12 +54,31 @@ Business rules that operate on these tables — they live in the plan for the fe
 ## 4. Cross-cutting rules
 
 ### 4.1 Money
-`Decimal` or integer cents end to end — column type, Python type, and JSON representation. Never
-float, at any layer, including the frontend.
 
-- [ ] **DECIDE:** integer cents vs. `NUMERIC(10,2)`. Cents removes a whole class of rounding
-      surprise and serializes cleanly to JSON; `NUMERIC` reads better in ad-hoc SQL. Pick once, at
-      step 1, and make it a lint rule.
+**DECIDED: integer cents, everywhere.** `integer` columns, `number` in TypeScript, whole numbers in
+JSON. Never a decimal, never a float, at any layer, including the frontend.
+
+TypeScript decided this rather than we did. JavaScript has exactly one numeric type and it is an
+IEEE-754 float64 — `0.1 + 0.2` is `0.30000000000000004`, and there is no `Decimal` in the standard
+library to escape to. `NUMERIC(10,2)` in Postgres would still arrive in the application as something
+that has to become a `number` eventually, and the moment it does the guarantee is gone.
+
+Two consequences worth internalising:
+
+- **Name the unit into the TypeScript identifier.** `depositCents`, `costPerYardCents`,
+  `flatRateCents` — never `deposit`. A variable called `total` holding `4250` is a bug waiting for
+  someone to render it. This is the lint rule: money identifiers end in `Cents`.
+
+  **Column names in §3 keep their existing shape** (`final_total`, `cost_per_yard`, `amount`) and
+  Drizzle maps across the gap: `finalTotalCents: integer('final_total')`. Renaming twenty columns
+  would ripple through every plan that references them for no safety gained — the column's type is
+  already `integer`, and nobody hand-writes a decimal into a database column by accident. The
+  mistake this rule prevents happens in application code, so the suffix lives there.
+- **Divide exactly once, at the edge**, in the formatter that turns `4250` into `$42.50`. Anything
+  that divides earlier has re-introduced the float.
+
+Precision is not the risk — a `number` represents integers exactly up to 2^53, roughly ninety
+trillion dollars in cents. The risk is a person typing `19.99`.
 
 ### 4.2 Snapshotting
 Anything the customer was quoted against must be **frozen onto the order** at quote time so later
@@ -90,26 +109,41 @@ is a table whose authorization story has not been thought through yet.
 
 ## 5. Migrations
 
-- Alembic, autogenerate reviewed by hand — never applied blind.
-- Every migration must be **reversible**, and CI asserts it ([[00-development-environment]]).
+**Drizzle Kit**, generating SQL from the schema definition in `api/src/db/schema.ts`.
+
+- Generated SQL is **reviewed by hand before it is applied** — never run blind. `drizzle-kit
+  generate` is a drafting tool, not an authority.
+- **⚠ Drizzle Kit does not write `down` migrations.** Every generated `up` gets a hand-written
+  `down` beside it, and CI runs up → down → up against a scratch database
+  ([[00-development-environment]] §7). This is the known cost of choosing Drizzle over Prisma —
+  Prisma has no down-migrations at all, so the alternative was worse — and it is the invariant most
+  likely to rot quietly, because nothing breaks the day you skip it.
 - The application's database role holds **no DDL rights**; migrations run as a separate role
   ([[03-security-baseline]]).
-- Data migrations are separate revisions from schema migrations, so a failed backfill does not strand
-  a schema change.
+- Data migrations are separate files from schema migrations, so a failed backfill does not strand a
+  schema change.
+
+**Column names stay `snake_case`; TypeScript properties are `camelCase`.** Drizzle maps between them
+in the schema definition, so `cost_per_yard_cents` in Postgres reads as `costPerYardCents` in code.
+Both languages keep their own convention and neither leaks into the other — the tables in §3 are
+written the way the database sees them.
 
 ## 6. Open questions
 
-1. Money representation (§4.1).
-2. Whether `order_hardware` is populated at submission (from feature `required_hardware[]`) or only
+1. Whether `order_hardware` is populated at submission (from feature `required_hardware[]`) or only
    at quote approval. Affects whether the estimate and the quote can disagree on hardware —
    resolve in [[04-pricing-engine]].
-3. Soft-delete vs. hard-delete for customer data, driven by the retention decision in
+2. Soft-delete vs. hard-delete for customer data, driven by the retention decision in
    [[03-security-baseline]].
+3. Test database strategy — transactional rollback per test vs. schema-per-worker. Carried over from
+   [[00-development-environment]] §8, which parked it until there was a schema to test against.
+   There is one now.
 
 ## 7. Definition of done
 
-- [ ] All tables in §3 created via Alembic, reversible, applied by `docker compose up`
-- [ ] Money type decided and enforced by a lint/type rule
+- [ ] All tables in §3 created via Drizzle Kit migrations, each with a hand-written `down`
+- [ ] `npm run db:migrate` applies them from empty; up → down → up passes in CI
+- [ ] Money columns are `integer` and every money identifier ends in `Cents`, enforced by lint
 - [ ] Seed script populates every table ([[00-development-environment]])
 - [ ] App role verified to be unable to run DDL
 </content>

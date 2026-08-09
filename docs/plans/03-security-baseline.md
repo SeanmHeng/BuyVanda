@@ -1,7 +1,7 @@
 # 03 — Security Baseline (cross-cutting)
 
 **Status:** Scaffold — not started
-**Build step:** applied continuously from step 1; Redis rate limiting lands at step 5 · **Owner:** [P]
+**Build step:** applied continuously from step 1; rate limiting lands at step 5 · **Owner:** [P]
 **Depends on:** [[02-identity-and-authorization]]
 **Unblocks:** nothing directly — it is a constraint on every other plan
 **Source:** PRD §11.1, §11.3–§11.5, §11.7, §11.10–§11.13
@@ -19,11 +19,11 @@ warrant one.
 
 The single highest-value rule in the system. The browser sends **selections**, never prices.
 
-```python
-# The request body contains ONLY ids and measurements:
-#   silhouette_id, fabric_id, feature_ids[], measurement_profile_id, shipping_address
-# It NEVER contains: unit prices, subtotal, total, deposit_amount, yards, buffer_pct,
-#   queue position, status, priority, drop_id, or user_id.
+```ts
+// The request body contains ONLY ids and measurements:
+//   silhouetteId, fabricId, featureIds[], measurementProfileId, shippingAddress
+// It NEVER contains: unit prices, subtotal, total, depositCents, yards, bufferPct,
+//   queue position, status, priority, dropId, or userId.
 ```
 
 Everything monetary is recomputed server-side from database rows at submission and again at quote
@@ -34,8 +34,11 @@ The same applies to state: transitions go through the state machine on the serve
 **only** by the verified Stripe webhook handler, never from a browser redirect to `success_url`
 ([[13-payments-and-stripe]]).
 
-Every Pydantic request model sets `model_config = ConfigDict(extra="forbid")`, so an unexpected field
-is a 400 rather than something that silently lands in `**kwargs`.
+Every request schema is a Zod object with **`.strict()`**, so an unexpected key is a 400 rather than
+a field that silently vanishes. Zod strips unknown keys by default — quietly, with no error — which
+is the friendlier behaviour and the wrong one here. `.strict()` is not optional decoration; without
+it a client can send `totalCents` and get a 200, having learned that the field is ignored rather
+than rejected. A test walks every exported schema in `shared/` and fails on any that is not strict.
 
 ## 3. Input validation — domain bounds, not just types
 
@@ -46,17 +49,19 @@ is a 400 rather than something that silently lands in `**kwargs`.
   `feature_id` must be in the chosen silhouette's `applies_to`. Otherwise a crafted request orders a
   non-curated fabric or an incompatible feature.
 - **Caps on quantities and free text** — notes, messages, custom requests — so a 10 MB message body
-  cannot be posted.
-- Money is `Decimal`/integer cents throughout. Never float.
+  cannot be posted. `z.string().max(n)` on every free-text field; there is no default limit.
+- Money is integer cents throughout, and **the client never sends any**
+  ([[01-data-model-and-migrations]] §4.1).
 
 ## 4. SQL injection
 
-SQLAlchemy parameterizes by default, so exposure is confined to where we bypass it:
+Drizzle's query builder parameterizes everything, so exposure is confined to where we bypass it:
 
-- **Never** f-string or `%`-format user input into `text()`. Bind parameters:
-  `text("... WHERE id = :id").bindparams(id=id)`.
+- Raw SQL goes through the **`sql` template tag**, which parameterizes interpolated values:
+  `sql\`... WHERE id = ${id}\``. Never build a query by string concatenation and pass the result in.
 - **Identifiers cannot be parameterized.** Any dynamic `ORDER BY`, column filter, or table name comes
-  from a hardcoded allowlist dict, never from a request string.
+  from a hardcoded allowlist object, never from a request string. `sql.identifier()` still needs the
+  value to have come from the allowlist first.
 - Escape `%` and `_` in user input used in `LIKE` — fabric search in the admin panel
   ([[15-admin-catalog-and-price-list]]).
 - The app's database role owns no DDL rights ([[01-data-model-and-migrations]]).
@@ -91,8 +96,20 @@ addresses via CGNAT, so an aggressive IP limit blocks legitimate buyers at exact
 while a determined abuser rotates addresses. Account-scoped limits plus verified email do the real
 work; IP limits are a backstop against unauthenticated floods.
 
-Implemented in **Redis** — shared across instances. In-process counters are useless behind more than
-one container. Edge/WAF limits are an additional layer, not a replacement.
+Implemented as **counters in Postgres**, behind a single `checkRateLimit()` function.
+
+In-process counters are useless here — every Lambda invocation may be a fresh execution
+environment, so a counter in memory is a counter of one request. The store has to be shared, and
+Postgres is already the shared thing. At five concurrent commissions the write volume is trivial;
+this is a row with a compound key and an expiry, not an engineering problem.
+
+Keeping it behind one function is the point: if volume ever justifies Redis or DynamoDB, the change
+is inside that function and no call site moves.
+
+**API Gateway throttling is a separate, blunter layer** — per-route request ceilings that stop an
+unauthenticated flood before it reaches Lambda at all. It cannot express any of the rules in the
+table above, because those need to know who the user is and what is in the database. Use both; do
+not mistake one for the other.
 
 ## 7. File uploads (embroidery reference images, supplier invoices)
 
@@ -122,22 +139,27 @@ and do not follow redirects into them. **A sourcing request URL is customer-supp
 - The app stores **body measurements, addresses, and phone numbers** — modest but genuinely personal.
   TLS everywhere, encryption at rest, and measurements/addresses/tokens **stay out of application
   logs** and out of error-tracking payloads ([[20-observability-and-ops]]).
-- Errors return generic messages to the client; stack traces and SQL go to logs only. FastAPI runs
-  with debug **off** in production.
+- Errors return generic messages to the client; stack traces and SQL go to logs only. Hono's error
+  handler must never serialise the caught error into the response body — the default in most
+  examples does exactly that, and a Drizzle error carries the query with it.
 - [ ] **DECIDE:** a stated retention/deletion path for customer data, since accounts hold body
       measurements. Needed before launch, not before build. Drives the soft-delete question in
       [[01-data-model-and-migrations]].
 
 ## 10. Dependencies
 
-Pin with lockfiles; Dependabot on; `pip-audit` / `npm audit` in CI ([[00-development-environment]]).
-Two language trees is two supply chains to watch.
+Pin with `package-lock.json`; Dependabot on; `npm audit` in CI ([[00-development-environment]]).
+
+One language tree now, but npm is the larger and more hostile of the two ecosystems — transitive
+dependency counts are an order of magnitude higher than pip's, and typosquatting is routine. Prefer
+few, well-known dependencies, and read what a package pulls in before adding it. The scraper repo
+carries its own Python supply chain, watched separately.
 
 ## 11. Definition of done
 
-- [ ] `extra="forbid"` on every request model, enforced by a test that walks the model registry
+- [ ] `.strict()` on every request schema, enforced by a test that walks everything `shared/` exports
 - [ ] Security headers present on every response (asserted by test)
-- [ ] Redis rate limiting live with the tiers in §6
+- [ ] Postgres-backed rate limiting live with the tiers in §6, behind one function
 - [ ] Upload pipeline re-encodes and rejects SVG (tested with a crafted file)
 - [ ] SSRF guard covering the metadata endpoint and private ranges (tested)
 - [ ] PII scrubbing verified in the error tracker before launch
