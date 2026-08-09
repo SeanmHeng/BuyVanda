@@ -29,16 +29,12 @@ matter most (expiry, forfeit, full shop) are the ones you will otherwise never s
 
 ## 3. Repository layout
 
-Decided: **two repos already exist** (`BuyVanda` for docs/API, `BuyVanda-Web` for the frontend), plus
-a third for the scraper.
-
-- [ ] **DECIDE:** keep the API and web app in separate repos, or collapse into one monorepo before
-      step 1. A monorepo makes the generated-client check (§6) a single CI job instead of a
-      cross-repo dance; two repos keep deploys independent. For a solo developer the monorepo is
-      probably right, and this is much cheaper to change now than at step 8.
+**DECIDED:** the API and the web app share **one repo**. They also share a generated OpenAPI client,
+which makes the drift check (§6) a single CI job instead of a cross-repo dance. Two repos would keep
+deploys independent, but for one developer that independence costs more coordination than it saves.
 
 ```
-buyvanda/
+BuyVanda/
   api/            FastAPI, SQLAlchemy, Alembic, the pricing package, the worker
   web/            React + TypeScript (Vite)
   docs/           PRD.md + plans/
@@ -114,8 +110,7 @@ Two suites are called out because they only protect anything if they **cannot be
 
 ## 8. Open questions
 
-1. Monorepo vs. two repos (§3).
-2. Test database strategy — transactional rollback per test vs. schema-per-worker. Affects suite
+1. Test database strategy — transactional rollback per test vs. schema-per-worker. Affects suite
    wall-clock more than correctness; pick at step 1 when there is a schema to test against.
 
 ## 9. Definition of done
