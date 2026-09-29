@@ -25,6 +25,13 @@ The unit selector (`in`/`cm`) is **explicit and required** — never defaulted, 
 unmarked cm value read as inches is the worst single failure mode in the product. `units` is stored
 on the profile and on the order snapshot.
 
+**DECIDED: every measurement is stored as whole millimetres** (`waist_mm`, `inseam_mm`, …), whatever
+unit the customer typed. An `integer` column in inches cannot hold 32½", and a fractional column
+brings back the float that money already banned — so this is the cents rule applied to length. The
+API converts to mm once, on the way in; the UI converts back to the profile's `units` once, for
+display. `units` records only what the customer entered in, so the numbers can be shown back to them
+the way they wrote them. The same applies to `measurement_snapshot`: it holds mm.
+
 Fields (per `measurement_profiles`): waist, hip, thigh, knee, leg_opening, front_rise, back_rise,
 inseam, outseam, plus `fit_preference` and free-text `notes`.
 

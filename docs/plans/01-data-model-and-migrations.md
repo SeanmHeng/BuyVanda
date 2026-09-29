@@ -28,7 +28,7 @@ Business rules that operate on these tables — they live in the plan for the fe
 | Table | Key fields | Owned by plan |
 | --- | --- | --- |
 | `users` | id, email, email_verified_at, phone, contact_preference (`in_app`/`email`/`phone`), notify_on_drop, role (`customer`/`admin`), idp_subject | [[02-identity-and-authorization]] |
-| `measurement_profiles` | user_id, label, units, waist, hip, thigh, knee, leg_opening, front_rise, back_rise, inseam, outseam, fit_preference, notes | [[06-measurement-capture]] |
+| `measurement_profiles` | user_id, label, units (`in`/`cm`), waist_mm, hip_mm, thigh_mm, knee_mm, leg_opening_mm, front_rise_mm, back_rise_mm, inseam_mm, outseam_mm, fit_preference, notes | [[06-measurement-capture]] |
 | `measurement_flags` | order_id, field, rule, message | [[06-measurement-capture]] |
 | `suppliers` | id, name, url, lead_time_typical_days, lead_time_worst_days, notes | [[15-admin-catalog-and-price-list]] |
 | `fabrics` | id, name, color, weight_oz, cost_per_yard, price_buffer_pct, is_curated, reorderable, supplier_id, product_url, last_price_checked_at, photo_key | [[15-admin-catalog-and-price-list]] |

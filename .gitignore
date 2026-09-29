@@ -1,12 +1,8 @@
-# Python
-__pycache__/
-*.py[cod]
-.venv/
-venv/
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+# Node
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
 
 # Environment — never commit real secrets
 .env
@@ -21,8 +17,11 @@ Thumbs.db
 .idea/
 *.swp
 
+# Local lint config
+eslint.config.mjs
+
 # Logs
 *.log
 
-# Personal working notes — not part of the design docs
-MY-ROADMAP.md
+# Personal working notes and cheatsheets — not part of the design docs
+notes/

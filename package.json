@@ -1,0 +1,31 @@
+{
+  "name": "buyvanda",
+  "version": "1.0.0",
+  "description": "Made-to-measure denim. Five commissions at a time, sold as drops.",
+  "private": true,
+  "license": "ISC",
+  "workspaces": [
+    "api",
+    "web",
+    "shared"
+  ],
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p api",
+    "db:seed": "tsx api/src/seed.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/SeanmHeng/BuyVanda.git"
+  },
+  "bugs": {
+    "url": "https://github.com/SeanmHeng/BuyVanda/issues"
+  },
+  "homepage": "https://github.com/SeanmHeng/BuyVanda#readme",
+  "devDependencies": {
+    "eslint": "^10.9.1",
+    "tsx": "^4.23.12",
+    "typescript": "5.9.2",
+    "typescript-eslint": "^8.68.0"
+  }
+}
