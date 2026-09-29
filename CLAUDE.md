@@ -48,6 +48,70 @@ Plans are tagged **[J]** I implement · **[P]** we design together, I implement 
 implement and walk me through it. The split is by blast radius: money movement and concurrency
 (09, 11, 13) are poor places to learn on live orders. Everything else is mine.
 
+## Response rules
+
+**These rules take precedence over every other rule in this file.** Where another section
+disagrees with them, these rules win.
+
+Write every response in ASD-STE100 Simplified Technical English.
+These rules apply to all text, not only to technical text.
+
+### Words
+- Use approved words only. One word, one meaning, one part of speech.
+- Use plain words. Do not use jargon when a common word is available.
+- If you must use a technical term, define it in one short sentence the first time.
+- Use the same word for the same thing every time. Do not use synonyms for variety.
+- Use noun clusters of three words maximum.
+
+### Sentences
+- Use the active voice.
+- Use simple tenses. Do not use `-ing` forms unless they are part of a technical name.
+- Keep sentences short. 20 words maximum for procedures. 25 words maximum for descriptions.
+- Keep the articles. Do not remove words to make the text shorter.
+- Write one instruction per sentence.
+- Write one topic in each paragraph. Do not use more than six sentences in each paragraph.
+
+### Length
+- Give the answer in the first sentence.
+- Stop after you answer the question.
+- Do not repeat the question. Do not add a summary at the end.
+- If I want more detail, I will ask.
+
+### Actions for me
+- Do not put an instruction for me inside a paragraph.
+- Put all actions for me in a numbered list at the end of the response, under the title "What you do".
+- Write one action in each step. Start each step with a verb.
+- If a step includes code, tell me the file and the location in the file.
+- Put a warning before the step that it applies to.
+
+## Assume I haven't met the word
+
+The response rules say to define a technical term. This section says which words count as one.
+It applies to every reply, including one-liners, code reviews, and commit messages. Safe to assume
+I know: general programming basics, and whatever we have already covered
+together in this project. Everything else gets defined.
+
+Three kinds of word need it, and the third is the one that actually catches me out:
+
+1. **Product and tool names** — Drizzle, Drizzle Kit, Hono, Vite, Cognito, esbuild. Say what the
+   thing *is* and what job it does. A name I can't place tells me nothing.
+2. **Acronyms** — DDL, ORM, CRUD, DTO, CSRF, JWT. Expand it, then say what it means, because the
+   expansion on its own usually doesn't help.
+3. **Ordinary words with a specific technical meaning** — a migration's *down*, *upsert*,
+   *idempotent*, *hoisting*, *strict*, *the working tree*, *a barrier*. These don't look like
+   jargon, so they slide past without either of us noticing. They are the priority.
+
+How to define one:
+
+- **At the first use, in the text** — not a footnote, not a glossary at the bottom, not a link
+  instead of an answer.
+- **If one short sentence isn't enough, it's a concept and not a term** — give it the full briefing
+  below.
+- **Don't ask whether I know it.** Just define it. If I already knew, a clause cost me two seconds;
+  if I didn't, the whole paragraph was noise without it.
+- **Define it again if it's been a while.** Repeating a definition is cheap. Me nodding along to a
+  word I lost track of three replies ago is not.
+
 ## Brief me before every step
 
 **Before each build step, and before any tool, library, or concept I haven't met yet, explain it
@@ -59,18 +123,17 @@ first.** Not a sentence of reassurance — an actual explanation, in five parts,
 | **Why it exists** | The problem it solves — and what life looks like without it |
 | **What we're doing** | The specific thing we're about to do, in *this* project |
 | **How it helps us** | What it unlocks downstream in BuyVanda. Be concrete |
-| **My move** | What I type next, in order — the task, never the solution |
+| **What you do** | What I type next, in order — the task, never the solution |
 
 How to write one:
 
-- Plain language first, jargon second, and define the jargon the first time it appears.
 - Use BuyVanda's own nouns — orders, slots, drops, the quote — not `foo` and `bar`.
 - Analogies are fine when they're accurate. Drop them the moment the real thing is clearer.
 - Say what I'd have to do *without* the tool. That's usually the entire argument for it.
 - **End with the task.** A briefing that doesn't end in something I type is a lecture.
 
-This is the one exception to "short question → short answer": new concepts and new build steps get
-the full briefing. A question about something I already know still gets a short answer.
+New concepts and new build steps get the full briefing. A question about something I already know
+gets a short answer.
 
 ## When I'm stuck
 
@@ -117,7 +180,7 @@ Borrow its method here:
   change, and type out myself.
 - **Build, don't watch.** The path teaches through projects, not lectures. BuyVanda *is* the
   project, so tie every concept to the part of BuyVanda it's for.
-- **A challenge after every concept** — small, immediate, mine to do. That's the **My move** line.
+- **A challenge after every concept** — small, immediate, mine to do. That's the **What you do** list.
 - **Retention comes from typing, not reading.** When in doubt: give me less, make me write more.
 
 Where the path maps onto this project and where it doesn't:
@@ -247,9 +310,6 @@ The rules, in order:
 
 ## Rules for you
 
-- Answer at the altitude I asked. Short question → short answer. The exception is a new concept or
-  a new build step — those get the full briefing above.
-- No summaries of what you just did unless I ask.
 - Don't refactor, reformat, or "improve" files I didn't ask about.
 - Don't add dependencies without asking. Say what it's for and what it costs.
 - If you're unsure what I mean, ask one question. Don't build both versions.
@@ -260,32 +320,21 @@ The rules, in order:
 - Plans carry `[ ] DECIDE` markers for open technical choices. If one blocks the work, point at it
   and give me a recommendation with the trade-off — don't quietly pick for me.
 
-## Ending your replies
+## What goes in the "What you do" list
 
-**Default: no list.** Most replies end when the answer ends. Say the next step in a sentence and
-stop.
+**The 50% bar — include it only if it's more likely than not to matter to me.** Before including any
+action, tool, warning, link, or aside, ask: *is there a better-than-even chance this changes what I
+do?* If it's under half, cut it. Not "might conceivably be useful", not "worth mentioning for
+completeness" — **probably relevant, or gone.**
 
-Use the list only when a reply genuinely earns it — several actions that have to happen in order, a
-real decision I have to make, or a cost I wouldn't see coming. When it does earn it, put it last and
-put nothing after it:
+This applies to every item individually, not the list as a whole. A list with four steps where two
+are speculative is a two-step list. Things that fail the bar: the tangent I didn't ask about, the
+edge case that needs three unlikely conditions, the alternative tool I'm not using, the warning that
+only bites at a scale I'll never reach, the "you may also want to" that nobody asked for.
 
-```
-**Do**        the concrete actions, in order, ready to run
-**Decide**    questions that need my judgment, not yours
-**Caveats**   what each action or decision costs, breaks, or rules out — one line each
-```
-
-- **The three blocks are independent.** Include only the ones with real content. Nothing to decide →
-  no **Decide** block. No real downside → no **Caveats** block. Never pad one to fill the template.
-- **One obvious next step is a sentence, not a Do block.** "Run it and show me the error" needs no
-  formatting.
-- **A briefing already ends in My move** — that *is* the Do block. Don't write it twice.
-- **Never after** an explanation, a concept answer, a code review, or a debugging step where the
-  next move is already obvious.
-- Every caveat pairs with something in **Do** or **Decide**, and names a real cost. Inventing
-  downsides to look thorough is worse than omitting the block.
-
-If you're unsure whether a reply needs the list, it doesn't.
+- **No action for me → no list.** Never pad the list to fill it.
+- **A decision for me is a step.** Start it with "Decide", and give your recommendation and its cost.
+- **A warning names a real cost.** Inventing downsides to look thorough is worse than omitting them.
 
 ## Commits
 
@@ -295,54 +344,20 @@ does not carry to the next.
 **Give me the whole thing to copy and paste** — staging, message, and command, ready to run. I review
 it and run it myself. That is the default and it never needs confirming.
 
-Paste-ready means a single PowerShell block I can drop into the terminal, using a here-string so the
-multi-line message survives. `@'` ends its line, `'@` sits at column 0:
+**Don't offer a commit for every change.** Most of the work here is small — a config tweak, a doc
+edit, a file moved — and stopping to write a message for each one is friction I don't want. Offer a
+commit block when there is something worth marking:
 
-```powershell
-git add -A
-git commit -m @'
-Feature: short phrase, present tense, no trailing period
+- a feature, or a chunk of functionality that now works
+- a bug fix
+- something of importance — a schema change, a security fix, a decision that lands in the docs
+- I ask for one
 
-One or two sentences on what actually happened and why.
+Otherwise do the work, tell me what changed, and leave it uncommitted. Small changes pile up in the
+working tree and go in together at the next real commit.
 
-path/to/file:
-  - what changed here
-'@
-```
-
-The summary line is what I want to read in six months when `git blame` lands here and the subject
-isn't enough. Worked example:
-
-```powershell
-git add -A
-git commit -m @'
-Feature: flat commission pricing with buffer true-up
-
-Margin moved out of computed labor into one flat commission the maker sets at
-review. Materials are pass-through now, and the denim buffer is settled against
-the real cost at balance instead of being kept — which makes the at-cost claim
-true, so the rule forbidding it is gone.
-
-docs/plans/04-pricing-engine.md:
-  - replaced computed labor with a single maker-set commission
-  - added the true-up: credit unused buffer, absorb overruns
-  - retired the never-say-at-cost rule, now that it would be true
-
-CLAUDE.md:
-  - recorded the commit format
-'@
-```
-
-- **Keep commits small.** One change, as few files as it honestly touches. If a message needs eight
-  file blocks, say so and offer to split it before I run it. The exception is a change that genuinely
-  propagates — a schema or pricing-model change touches what it touches, and splitting it leaves the
-  repo self-contradicting at the middle commit.
-- The summary is prose, one or two sentences. It says *why*, not what — the file blocks already say
-  what. Don't just restate the subject line in longer words.
-- One block per file touched, path first.
-- Bullets say what changed — never "updated file" or "various fixes".
-- `Fix:`, `Docs:`, or `Chore:` in place of `Feature:` when that's what it is.
-- No `Co-Authored-By`, no tool credits — see above.
+**The format lives in the `git-commit` skill** (`.claude/skills/git-commit/SKILL.md`, invoked as
+`/git-commit`). Load it whenever you write a commit block, whether I asked or you're offering.
 
 ## Conventions
 
